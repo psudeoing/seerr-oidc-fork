@@ -1,0 +1,54 @@
+name: Build Linux Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        # FIX 2: Force production environment variables
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Create full tarball
+        run: |
+          tar -czf "../seerr-oidc-fork-x86_64.tar.gz" config dist .next node_modules package.json public seerr-api.yml
+          mv "../seerr-oidc-fork-x86_64.tar.gz" .
+          
+      - name: Create Release and Upload Asset
+        run: |
+          # Uses the workflow run count as a unique version number
+          TAG="v1.0.${{ github.run_number }}"
+          
+          gh release create "$TAG" \
+            --target develop \
+            --title "Build #$TAG" \
+            --generate-notes
+
+          gh release upload "$TAG" "seerr-oidc-fork-x86_64.tar.gz" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
